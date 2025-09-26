@@ -8,8 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { ArrowDown, Wallet, ExternalLink } from "lucide-react"
 import { useWallet } from "@/hooks/useWallet"
-import { useContractData } from "@/hooks/useContractData"
-import { useTransactions } from "@/hooks/useTransactions"
+import { useOptimisticContractData } from "@/hooks/useOptimisticContractData"
+import { useOptimisticTransactions } from "@/hooks/useOptimisticTransactions"
 import { ethers } from "ethers"
 
 const SUPPORTED_ASSETS = [
@@ -48,8 +48,8 @@ const RISK_LEVELS = [
 
 export default function DepositInterface() {
   const { isConnected, address, provider } = useWallet()
-  const { refreshData, userPosition } = useContractData()
-  const { depositNativeFlow, depositToken, loading: txLoading, error: txError } = useTransactions()
+  const { userPosition } = useOptimisticContractData()
+  const { depositNativeFlow, depositToken, loading: txLoading, error: txError } = useOptimisticTransactions()
   const [selectedAsset, setSelectedAsset] = useState("")
   const [amount, setAmount] = useState("")
   
@@ -125,9 +125,8 @@ export default function DepositInterface() {
       }
 
       console.log("[v0] Deposit transaction hash:", txHash)
-
-      // Refresh data and reset form
-      await refreshData()
+      
+      // Reset form (data will be updated optimistically)
       setAmount("")
       // Don't reset selectedAsset to allow quick consecutive deposits
     } catch (error) {

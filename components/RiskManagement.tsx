@@ -5,8 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Settings, TrendingUp, AlertTriangle } from "lucide-react"
-import { useContractData } from "@/hooks/useContractData"
-import { useTransactions } from "@/hooks/useTransactions"
+import { useOptimisticContractData } from "@/hooks/useOptimisticContractData"
+import { useOptimisticTransactions } from "@/hooks/useOptimisticTransactions"
 import { useWallet } from "@/hooks/useWallet"
 
 const RISK_LEVELS = [
@@ -38,8 +38,8 @@ const RISK_LEVELS = [
 
 export default function RiskManagement() {
   const { isConnected } = useWallet()
-  const { userPosition, refreshData } = useContractData()
-  const { updateRiskLevel, loading: txLoading } = useTransactions()
+  const { userPosition } = useOptimisticContractData()
+  const { updateRiskLevel, loading: txLoading } = useOptimisticTransactions()
   const [selectedRisk, setSelectedRisk] = useState<number | null>(null)
 
   if (!isConnected || !userPosition || Number.parseFloat(userPosition.totalDeposited) === 0) {
@@ -54,7 +54,7 @@ export default function RiskManagement() {
 
     try {
       await updateRiskLevel(selectedRisk)
-      await refreshData()
+      // UI will be updated optimistically
       setSelectedRisk(null)
     } catch (err) {
       console.error("Risk level update failed:", err)

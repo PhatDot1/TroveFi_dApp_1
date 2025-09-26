@@ -5,12 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Clock, TrendingUp, Zap } from "lucide-react"
-import { useContractData } from "@/hooks/useContractData"
+import { useOptimisticContractData } from "@/hooks/useOptimisticContractData"
 import { useWallet } from "@/hooks/useWallet"
 
 export default function CookingVisualization() {
   const { isConnected } = useWallet()
-  const { userDashboard, epochInfo, userPosition, userDeposit, loading } = useContractData()
+  const { userDashboard, epochInfo, userPosition, userDeposit, hasOptimisticUpdates } = useOptimisticContractData()
   const [timeRemaining, setTimeRemaining] = useState(0)
 
   useEffect(() => {
@@ -39,19 +39,6 @@ export default function CookingVisualization() {
     )
   }
 
-  if (loading) {
-    return (
-      <Card className="glass-card">
-        <CardContent className="p-8 text-center">
-          <div className="flex items-center justify-center gap-2 text-muted-foreground">
-            <div className="w-4 h-4 border border-current border-t-transparent rounded-full animate-spin" />
-            Loading cooking data...
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
-
   // Handle case where user has no deposits
   if (!userPosition || Number.parseFloat(userPosition.totalDeposited) === 0) {
     return (
@@ -62,6 +49,9 @@ export default function CookingVisualization() {
               <Zap className="w-3 h-3 text-white" />
             </div>
             Cooking Status
+            {hasOptimisticUpdates && (
+              <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse ml-2" />
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-8 text-center space-y-4">

@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { TrendingUp, DollarSign, Clock, ArrowUpRight, ArrowDownRight, Settings } from "lucide-react"
-import { useContractData } from "@/hooks/useContractData"
-import { useTransactions } from "@/hooks/useTransactions"
+import { useOptimisticContractData } from "@/hooks/useOptimisticContractData"
+import { useOptimisticTransactions } from "@/hooks/useOptimisticTransactions"
 import { useWallet } from "@/hooks/useWallet"
 
 interface PortfolioDashboardProps {
@@ -16,8 +16,8 @@ interface PortfolioDashboardProps {
 
 export default function PortfolioDashboard({ setActiveTab }: PortfolioDashboardProps) {
   const { isConnected } = useWallet()
-  const { userDashboard, userPosition, userDeposit, vaultMetrics, loading: dataLoading } = useContractData()
-  const { requestWithdrawal, updateRiskLevel, loading: txLoading } = useTransactions()
+  const { userDashboard, userPosition, userDeposit, vaultMetrics, hasOptimisticUpdates } = useOptimisticContractData()
+  const { requestWithdrawal, updateRiskLevel, loading: txLoading } = useOptimisticTransactions()
   const [showWithdrawModal, setShowWithdrawModal] = useState(false)
   const [withdrawAmount, setWithdrawAmount] = useState("")
 
@@ -28,21 +28,6 @@ export default function PortfolioDashboard({ setActiveTab }: PortfolioDashboardP
           <CardContent className="p-8 text-center">
             <div className="text-muted-foreground">
               Connect your wallet to view portfolio
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  if (dataLoading) {
-    return (
-      <div className="space-y-6">
-        <Card className="glass-card">
-          <CardContent className="p-8 text-center">
-            <div className="flex items-center justify-center gap-2 text-muted-foreground">
-              <div className="w-4 h-4 border border-current border-t-transparent rounded-full animate-spin" />
-              Loading portfolio data...
             </div>
           </CardContent>
         </Card>
@@ -150,6 +135,9 @@ export default function PortfolioDashboard({ setActiveTab }: PortfolioDashboardP
               <DollarSign className="w-3 h-3 text-primary-foreground" />
             </div>
             Portfolio Overview
+            {hasOptimisticUpdates && (
+              <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse ml-2" />
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
