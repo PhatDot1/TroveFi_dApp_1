@@ -4,15 +4,15 @@ import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Gift, Trophy, Star, Zap, Clock, CheckCircle } from "lucide-react"
-import { useContractData } from "@/hooks/useContractData"
-import { useTransactions } from "@/hooks/useTransactions"
+import { Gift, Trophy, Star, Zap, Clock, CircleCheck as CheckCircle } from "lucide-react"
+import { useOptimisticContractData } from "@/hooks/useOptimisticContractData"
+import { useOptimisticTransactions } from "@/hooks/useOptimisticTransactions"
 import { useWallet } from "@/hooks/useWallet"
 
 export default function EpochRewardsGrid() {
   const { isConnected } = useWallet()
-  const { userDashboard, epochInfo, userPosition, loading, refreshData } = useContractData()
-  const { claimEpochReward, loading: txLoading } = useTransactions()
+  const { userDashboard, epochInfo, userPosition, hasOptimisticUpdates, hasUserDeposits } = useOptimisticContractData()
+  const { claimEpochReward, loading: txLoading } = useOptimisticTransactions()
   const [claimingEpoch, setClaimingEpoch] = useState<number | null>(null)
   const [recentClaim, setRecentClaim] = useState<{ epoch: number; won: boolean; amount: string } | null>(null)
 
@@ -31,8 +31,7 @@ export default function EpochRewardsGrid() {
 
       setRecentClaim({ epoch: epochNumber, won, amount })
 
-      // Refresh data to update UI
-      await refreshData()
+      // UI will be updated optimistically
     } catch (error) {
       console.error("Failed to claim epoch reward:", error)
     } finally {
@@ -50,21 +49,8 @@ export default function EpochRewardsGrid() {
     )
   }
 
-  if (loading) {
-    return (
-      <Card className="glass-card">
-        <CardContent className="p-8 text-center">
-          <div className="flex items-center justify-center gap-2 text-muted-foreground">
-            <div className="w-4 h-4 border border-current border-t-transparent rounded-full animate-spin" />
-            Loading epoch data...
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  // Handle case where user has no deposits
-  if (!userPosition || Number.parseFloat(userPosition.totalDeposited) === 0) {
+  // Handle case where user has no deposits - use helper function
+  if (!hasUserDeposits()) {
     return (
       <Card className="glass-card">
         <CardHeader>
@@ -73,6 +59,9 @@ export default function EpochRewardsGrid() {
               <Trophy className="w-3 h-3 text-accent-foreground" />
             </div>
             Epoch Rewards
+            {hasOptimisticUpdates && (
+              <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse ml-2" />
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-8 text-center space-y-4">
@@ -96,8 +85,8 @@ export default function EpochRewardsGrid() {
   const totalClaimableRewards = userDashboard ? Number.parseFloat(userDashboard.totalClaimableRewards) : 0
   
   // Calculate user's potential share of the total yield pool
-  const userDeposited = Number.parseFloat(userPosition.totalDeposited)
-  const userRiskLevel = userPosition.riskLevel
+  const userDeposited = userPosition ? Number.parseFloat(userPosition.totalDeposited) : 0
+  const userRiskLevel = userPosition?.riskLevel || 0
   const riskMultipliers = [0.5, 1.0, 2.0] // LOW, MEDIUM, HIGH
   const userRiskMultiplier = riskMultipliers[userRiskLevel] || 1.0
   

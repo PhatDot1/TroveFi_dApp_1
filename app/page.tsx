@@ -9,24 +9,38 @@ import PortfolioDashboard from "@/components/PortfolioDashboard"
 import RiskManagement from "@/components/RiskManagement"
 import WalletConnectButton from "@/components/WalletConnectButton"
 import Particles from "@/components/Particles"
+import { PortfolioSkeleton, CookingSkeleton, EpochRewardsSkeleton, DepositSkeleton } from "@/components/SkeletonLoaders"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useWallet } from "@/hooks/useWallet"
-import { useContractData } from "@/hooks/useContractData"
+import { useOptimisticContractData } from "@/hooks/useOptimisticContractData"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { RefreshCw, AlertCircle, Lock, ExternalLink } from "lucide-react"
+import { CircleAlert as AlertCircle, Lock, ExternalLink, Wifi, WifiOff } from "lucide-react"
 import { isAddressAllowed } from "@/lib/allowedAddresses"
 
 export default function TroveFiApp() {
   const [activeTab, setActiveTab] = useState("dashboard")
-  const { isConnected, address } = useWallet()
-  const { loading, error, refreshData } = useContractData()
+  const { isConnected, address, connect } = useWallet()
+  const { 
+    initialLoading, 
+    backgroundRefreshing, 
+    error, 
+    hasOptimisticUpdates,
+    lastSuccessfulFetch,
+    epochInfo,
+    userPosition,
+    hasUserDeposits
+  } = useOptimisticContractData()
   const [isAllowed, setIsAllowed] = useState(false)
 
   // Check if address is allowed
   useEffect(() => {
     setIsAllowed(isAddressAllowed(address))
   }, [address])
+
+  // Determine if we should show initial loading or welcome screen
+  const showWelcomeScreen = !isConnected
+  const showInitialLoading = isConnected && isAllowed && initialLoading && !hasUserDeposits()
 
   return (
     <main className="min-h-screen bg-background relative overflow-hidden">
@@ -53,19 +67,21 @@ export default function TroveFiApp() {
             </p>
           </div>
 
-          {/* Connection Check */}
-          {!isConnected ? (
+          {/* Welcome Screen - Only show when not connected */}
+          {showWelcomeScreen ? (
             <Card className="glass-card max-w-md mx-auto">
               <CardContent className="p-8 text-center space-y-4">
                 <div className="text-2xl font-bold text-foreground">Welcome to TroveFi</div>
                 <div className="text-muted-foreground">
                   Connect your wallet to access the no-loss yield lottery system
                 </div>
-                <WalletConnectButton 
-                  className="w-full py-6" 
-                  showAddress={false}
+                <Button
+                  onClick={connect}
+                  className="w-full py-6 bg-primary hover:bg-primary/80 text-primary-foreground"
                   size="lg"
-                />
+                >
+                  Connect Wallet
+                </Button>
               </CardContent>
             </Card>
           ) : !isAllowed ? (
@@ -109,14 +125,46 @@ export default function TroveFiApp() {
                 </div>
               </CardContent>
             </Card>
+          ) : showInitialLoading ? (
+            // Initial Loading - Only show when truly loading for first time
+            <div className="space-y-6">
+              <PortfolioSkeleton />
+            </div>
           ) : (
             <>
               {/* Beta Badge */}
-              <div className="mb-6 flex justify-center">
+              <div className="mb-6 flex justify-center items-center gap-4">
                 <Card className="glass-card border-primary/20 inline-block">
                   <CardContent className="px-4 py-2 flex items-center gap-2">
                     <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
                     <span className="text-sm font-medium text-primary">Closed Beta Access</span>
+                  </CardContent>
+                </Card>
+                
+                {/* Connection Status Indicator */}
+                <Card className="glass-card border-border/20 inline-block">
+                  <CardContent className="px-3 py-2 flex items-center gap-2">
+                    {backgroundRefreshing ? (
+                      <>
+                        <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                        <span className="text-xs text-muted-foreground">Syncing...</span>
+                      </>
+                    ) : hasOptimisticUpdates ? (
+                      <>
+                        <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
+                        <span className="text-xs text-muted-foreground">Pending...</span>
+                      </>
+                    ) : lastSuccessfulFetch > 0 ? (
+                      <>
+                        <Wifi className="w-3 h-3 text-green-500" />
+                        <span className="text-xs text-muted-foreground">Live</span>
+                      </>
+                    ) : (
+                      <>
+                        <WifiOff className="w-3 h-3 text-red-500" />
+                        <span className="text-xs text-muted-foreground">Offline</span>
+                      </>
+                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -128,30 +176,16 @@ export default function TroveFiApp() {
                     <div className="flex items-center gap-3">
                       <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
                       <div>
-                        <div className="font-medium text-red-600">Connection Error</div>
+                        <div className="font-medium text-red-600">
+                          {lastSuccessfulFetch > 0 ? "Sync Warning" : "Connection Error"}
+                        </div>
                         <div className="text-sm text-red-600/80">{error}</div>
+                        {lastSuccessfulFetch > 0 && (
+                          <div className="text-xs text-red-600/60 mt-1">
+                            Last updated: {new Date(lastSuccessfulFetch).toLocaleTimeString()}
+                          </div>
+                        )}
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={refreshData}
-                        disabled={loading}
-                        className="ml-auto"
-                      >
-                        <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Loading State */}
-              {loading && (
-                <Card className="glass-card mb-6">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-center gap-2 text-muted-foreground">
-                      <div className="w-4 h-4 border border-current border-t-transparent rounded-full animate-spin" />
-                      Loading vault data...
                     </div>
                   </CardContent>
                 </Card>
@@ -203,19 +237,6 @@ export default function TroveFiApp() {
                   </TabsContent>
                 </div>
               </Tabs>
-
-              {/* Manual Refresh Button */}
-              <div className="mt-8 text-center">
-                <Button
-                  variant="outline"
-                  onClick={refreshData}
-                  disabled={loading}
-                  className="glass-card border-border bg-transparent"
-                >
-                  <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-                  {loading ? "Refreshing..." : "Refresh Data"}
-                </Button>
-              </div>
             </>
           )}
         </div>

@@ -5,12 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Clock, TrendingUp, Zap } from "lucide-react"
-import { useContractData } from "@/hooks/useContractData"
+import { useOptimisticContractData } from "@/hooks/useOptimisticContractData"
 import { useWallet } from "@/hooks/useWallet"
 
 export default function CookingVisualization() {
   const { isConnected } = useWallet()
-  const { userDashboard, epochInfo, userPosition, userDeposit, loading } = useContractData()
+  const { userDashboard, epochInfo, userPosition, userDeposit, hasOptimisticUpdates, hasUserDeposits } = useOptimisticContractData()
   const [timeRemaining, setTimeRemaining] = useState(0)
 
   useEffect(() => {
@@ -39,21 +39,8 @@ export default function CookingVisualization() {
     )
   }
 
-  if (loading) {
-    return (
-      <Card className="glass-card">
-        <CardContent className="p-8 text-center">
-          <div className="flex items-center justify-center gap-2 text-muted-foreground">
-            <div className="w-4 h-4 border border-current border-t-transparent rounded-full animate-spin" />
-            Loading cooking data...
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  // Handle case where user has no deposits
-  if (!userPosition || Number.parseFloat(userPosition.totalDeposited) === 0) {
+  // Handle case where user has no deposits - use helper function
+  if (!hasUserDeposits()) {
     return (
       <Card className="glass-card">
         <CardHeader>
@@ -62,6 +49,9 @@ export default function CookingVisualization() {
               <Zap className="w-3 h-3 text-white" />
             </div>
             Cooking Status
+            {hasOptimisticUpdates && (
+              <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse ml-2" />
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-8 text-center space-y-4">
@@ -76,9 +66,10 @@ export default function CookingVisualization() {
     )
   }
 
-  const totalDeposited = Number.parseFloat(userPosition.totalDeposited)
+  // Safely get values with defaults
+  const totalDeposited = userPosition ? Number.parseFloat(userPosition.totalDeposited) : 0
   const currentEpoch = epochInfo?.epochNumber || 0
-  const riskLevel = userPosition.riskLevel
+  const riskLevel = userPosition?.riskLevel || 0
   const eligibleEpochsCount = userDashboard?.claimInfo.eligibleEpochsCount || 0
 
   // Calculate cooking intensity based on eligible epochs and deposit amount

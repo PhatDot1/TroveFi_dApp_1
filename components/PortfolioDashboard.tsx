@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { TrendingUp, DollarSign, Clock, ArrowUpRight, ArrowDownRight, Settings } from "lucide-react"
-import { useContractData } from "@/hooks/useContractData"
-import { useTransactions } from "@/hooks/useTransactions"
+import { useOptimisticContractData } from "@/hooks/useOptimisticContractData"
+import { useOptimisticTransactions } from "@/hooks/useOptimisticTransactions"
 import { useWallet } from "@/hooks/useWallet"
 
 interface PortfolioDashboardProps {
@@ -16,8 +16,8 @@ interface PortfolioDashboardProps {
 
 export default function PortfolioDashboard({ setActiveTab }: PortfolioDashboardProps) {
   const { isConnected } = useWallet()
-  const { userDashboard, userPosition, userDeposit, vaultMetrics, loading: dataLoading } = useContractData()
-  const { requestWithdrawal, updateRiskLevel, loading: txLoading } = useTransactions()
+  const { userDashboard, userPosition, userDeposit, vaultMetrics, hasOptimisticUpdates, hasUserDeposits } = useOptimisticContractData()
+  const { requestWithdrawal, updateRiskLevel, loading: txLoading } = useOptimisticTransactions()
   const [showWithdrawModal, setShowWithdrawModal] = useState(false)
   const [withdrawAmount, setWithdrawAmount] = useState("")
 
@@ -35,23 +35,8 @@ export default function PortfolioDashboard({ setActiveTab }: PortfolioDashboardP
     )
   }
 
-  if (dataLoading) {
-    return (
-      <div className="space-y-6">
-        <Card className="glass-card">
-          <CardContent className="p-8 text-center">
-            <div className="flex items-center justify-center gap-2 text-muted-foreground">
-              <div className="w-4 h-4 border border-current border-t-transparent rounded-full animate-spin" />
-              Loading portfolio data...
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  // Handle case where user has no deposits yet
-  if (!userDashboard || !userPosition || Number.parseFloat(userPosition.totalDeposited) === 0) {
+  // Handle case where user has no deposits yet - use helper function
+  if (!hasUserDeposits()) {
     return (
       <div className="space-y-6">
         <Card className="glass-card">
@@ -82,7 +67,8 @@ export default function PortfolioDashboard({ setActiveTab }: PortfolioDashboardP
     )
   }
 
-  const totalDeposited = Number.parseFloat(userPosition.totalDeposited)
+  // Safely get values with defaults
+  const totalDeposited = userPosition ? Number.parseFloat(userPosition.totalDeposited) : 0
   const totalRewards = userDashboard ? Number.parseFloat(userDashboard.totalClaimableRewards) : 0
   const estimatedNextReward = userDashboard ? Number.parseFloat(userDashboard.estimatedNextEpochReward) : 0
 
@@ -140,6 +126,9 @@ export default function PortfolioDashboard({ setActiveTab }: PortfolioDashboardP
     }
   }
 
+  // Get current risk level safely
+  const currentRiskLevel = userPosition?.riskLevel || 0
+
   return (
     <div className="space-y-6">
       {/* Portfolio Overview */}
@@ -150,6 +139,9 @@ export default function PortfolioDashboard({ setActiveTab }: PortfolioDashboardP
               <DollarSign className="w-3 h-3 text-primary-foreground" />
             </div>
             Portfolio Overview
+            {hasOptimisticUpdates && (
+              <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse ml-2" />
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -241,7 +233,7 @@ export default function PortfolioDashboard({ setActiveTab }: PortfolioDashboardP
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Shares</span>
-                <span className="font-medium text-foreground">{Number.parseFloat(userPosition.totalShares).toFixed(4)}</span>
+                <span className="font-medium text-foreground">{userPosition ? Number.parseFloat(userPosition.totalShares).toFixed(4) : "0"}</span>
               </div>
             </div>
           </CardContent>
@@ -257,8 +249,8 @@ export default function PortfolioDashboard({ setActiveTab }: PortfolioDashboardP
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Risk Level</span>
-                <Badge className={`${getRiskLevelColor(userPosition.riskLevel)} text-white`}>
-                  {getRiskLevelText(userPosition.riskLevel)}
+                <Badge className={`${getRiskLevelColor(currentRiskLevel)} text-white`}>
+                  {getRiskLevelText(currentRiskLevel)}
                 </Badge>
               </div>
             </div>
@@ -276,7 +268,7 @@ export default function PortfolioDashboard({ setActiveTab }: PortfolioDashboardP
             </div>
 
             {/* Withdrawal Status */}
-            {userPosition.withdrawalRequested && (
+            {userPosition?.withdrawalRequested && (
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Withdrawal Status</span>
@@ -289,14 +281,7 @@ export default function PortfolioDashboard({ setActiveTab }: PortfolioDashboardP
             )}
 
             {/* Withdrawal Impact Warning */}
-            <Card className="border-destructive/20 bg-destructive/5">
-              <CardContent className="p-3">
-                <div className="text-xs text-destructive-foreground">
-                  <strong>Withdrawal Impact:</strong> Withdrawing funds will forfeit future epoch rewards but your
-                  principal is always protected.
-                </div>
-              </CardContent>
-            </Card>
+
           </CardContent>
         </Card>
       </div>
