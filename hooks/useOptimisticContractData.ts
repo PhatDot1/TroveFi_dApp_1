@@ -95,21 +95,42 @@ interface OptimisticState {
   }>
 }
 
+// Persistent cache to maintain data across re-renders
+const dataCache = new Map<string, any>()
+const CACHE_DURATION = 60000 // 1 minute cache
+
 export function useOptimisticContractData() {
   const { isConnected, address } = useWallet()
   
-  // Core data state
-  const [epochInfo, setEpochInfo] = useState<EpochInfo | null>(null)
-  const [userDashboard, setUserDashboard] = useState<UserDashboard | null>(null)
-  const [vaultMetrics, setVaultMetrics] = useState<VaultMetrics | null>(null)
-  const [userPosition, setUserPosition] = useState<UserPosition | null>(null)
-  const [userDeposit, setUserDeposit] = useState<UserDeposit | null>(null)
+  // Core data state - Initialize with cached data if available
+  const [epochInfo, setEpochInfo] = useState<EpochInfo | null>(() => 
+    dataCache.get('epochInfo') || null
+  )
+  const [userDashboard, setUserDashboard] = useState<UserDashboard | null>(() => 
+    address ? dataCache.get(`userDashboard_${address}`) || null : null
+  )
+  const [vaultMetrics, setVaultMetrics] = useState<VaultMetrics | null>(() => 
+    dataCache.get('vaultMetrics') || null
+  )
+  const [userPosition, setUserPosition] = useState<UserPosition | null>(() => 
+    address ? dataCache.get(`userPosition_${address}`) || null : null
+  )
+  const [userDeposit, setUserDeposit] = useState<UserDeposit | null>(() => 
+    address ? dataCache.get(`userDeposit_${address}`) || null : null
+  )
   
   // UX state
-  const [initialLoading, setInitialLoading] = useState(true)
+  const [initialLoading, setInitialLoading] = useState(() => {
+    // Only show initial loading if we have no cached data for this user
+    if (!address) return false
+    const hasUserData = dataCache.get(`userPosition_${address}`) || dataCache.get(`userDashboard_${address}`)
+    return !hasUserData
+  })
   const [backgroundRefreshing, setBackgroundRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [lastSuccessfulFetch, setLastSuccessfulFetch] = useState<number>(0)
+  const [lastSuccessfulFetch, setLastSuccessfulFetch] = useState<number>(() => 
+    dataCache.get('lastSuccessfulFetch') || 0
+  )
   
   // Optimistic updates state
   const [optimisticState, setOptimisticState] = useState<OptimisticState>({
@@ -124,6 +145,19 @@ export function useOptimisticContractData() {
   const isRefreshingRef = useRef(false)
   const lastAddressRef = useRef<string | null>(null)
 
+  // Cache data with expiration
+  const cacheData = useCallback((key: string, data: any) => {
+    dataCache.set(key, data)
+    dataCache.set(`${key}_timestamp`, Date.now())
+  }, [])
+
+  // Check if cached data is still valid
+  const isCacheValid = useCallback((key: string): boolean => {
+    const timestamp = dataCache.get(`${key}_timestamp`)
+    if (!timestamp) return false
+    return Date.now() - timestamp < CACHE_DURATION
+  }, [])
+
   // Clear optimistic updates after timeout
   const clearExpiredOptimisticUpdates = useCallback(() => {
     const now = Date.now()
@@ -137,30 +171,44 @@ export function useOptimisticContractData() {
     }))
   }, [])
 
-  // Fetch functions
+  // Fetch functions with caching
   const fetchEpochInfo = async (): Promise<EpochInfo | null> => {
     try {
+      // Check cache first
+      if (isCacheValid('epochInfo')) {
+        return dataCache.get('epochInfo')
+      }
+
       const vaultExtension = getVaultExtensionContractReadOnly()
       const result = await vaultExtension.getCurrentEpochStatus()
       
-      return {
+      const epochData = {
         epochNumber: Number(result[0]),
         timeRemaining: Number(result[1]),
         yieldPool: ethers.formatUnits(result[2], 18),
         participantCount: Number(result[3]),
       }
+
+      cacheData('epochInfo', epochData)
+      return epochData
     } catch (err: any) {
       console.error("[OptimisticData] Failed to fetch epoch info:", err)
-      return null
+      // Return cached data if available
+      return dataCache.get('epochInfo') || null
     }
   }
 
   const fetchVaultMetrics = async (): Promise<VaultMetrics | null> => {
     try {
+      // Check cache first
+      if (isCacheValid('vaultMetrics')) {
+        return dataCache.get('vaultMetrics')
+      }
+
       const coreVault = getCoreVaultContractReadOnly()
       const result = await coreVault.getVaultMetrics()
       
-      return {
+      const metricsData = {
         totalValueLocked: ethers.formatUnits(result[0], 18),
         totalUsers: Number(result[1]),
         totalSupply: ethers.formatUnits(result[2], 18),
@@ -171,18 +219,28 @@ export function useOptimisticContractData() {
         totalYieldGenerated: ethers.formatUnits(result[7], 18),
         totalYieldDistributed: ethers.formatUnits(result[8], 18),
       }
+
+      cacheData('vaultMetrics', metricsData)
+      return metricsData
     } catch (err: any) {
       console.error("[OptimisticData] Failed to fetch vault metrics:", err)
-      return null
+      return dataCache.get('vaultMetrics') || null
     }
   }
 
   const fetchUserPosition = async (userAddress: string): Promise<UserPosition | null> => {
     try {
+      const cacheKey = `userPosition_${userAddress}`
+      
+      // Check cache first
+      if (isCacheValid(cacheKey)) {
+        return dataCache.get(cacheKey)
+      }
+
       const coreVault = getCoreVaultContractReadOnly()
       const result = await coreVault.getUserPosition(userAddress)
       
-      return {
+      const positionData = {
         totalShares: ethers.formatUnits(result[0], 18),
         lastDeposit: Number(result[1]),
         withdrawalRequested: result[2],
@@ -190,18 +248,28 @@ export function useOptimisticContractData() {
         riskLevel: Number(result[4]),
         totalDeposited: ethers.formatUnits(result[5], 18),
       }
+
+      cacheData(cacheKey, positionData)
+      return positionData
     } catch (err: any) {
       console.error("[OptimisticData] Failed to fetch user position:", err)
-      return null
+      return dataCache.get(`userPosition_${userAddress}`) || null
     }
   }
 
   const fetchUserDeposit = async (userAddress: string): Promise<UserDeposit | null> => {
     try {
+      const cacheKey = `userDeposit_${userAddress}`
+      
+      // Check cache first
+      if (isCacheValid(cacheKey)) {
+        return dataCache.get(cacheKey)
+      }
+
       const vaultExtension = getVaultExtensionContractReadOnly()
       const result = await vaultExtension.getUserDeposit(userAddress)
       
-      return {
+      const depositData = {
         totalDeposited: ethers.formatUnits(result[0], 18),
         currentBalance: ethers.formatUnits(result[1], 18),
         firstDepositEpoch: Number(result[2]),
@@ -209,14 +277,24 @@ export function useOptimisticContractData() {
         riskLevel: Number(result[4]),
         timeWeightedBalance: ethers.formatUnits(result[5], 18),
       }
+
+      cacheData(cacheKey, depositData)
+      return depositData
     } catch (err: any) {
       console.error("[OptimisticData] Failed to fetch user deposit:", err)
-      return null
+      return dataCache.get(`userDeposit_${userAddress}`) || null
     }
   }
 
   const fetchUserDashboard = async (userAddress: string, epochData: EpochInfo | null, positionData: UserPosition | null): Promise<UserDashboard | null> => {
     try {
+      const cacheKey = `userDashboard_${userAddress}`
+      
+      // Check cache first
+      if (isCacheValid(cacheKey)) {
+        return dataCache.get(cacheKey)
+      }
+
       const vaultExtension = getVaultExtensionContractReadOnly()
       
       const claimableEpochs = await vaultExtension.getClaimableEpochs(userAddress)
@@ -271,7 +349,7 @@ export function useOptimisticContractData() {
         }
       }
 
-      return {
+      const dashboardData = {
         claimInfo: {
           status: claimableEpochs.length > 0 ? 1 : 0,
           claimableEpochs: claimableEpochs.map((n: any) => Number(n)),
@@ -286,15 +364,18 @@ export function useOptimisticContractData() {
         totalClaimableRewards,
         estimatedNextEpochReward,
       }
+
+      cacheData(cacheKey, dashboardData)
+      return dashboardData
     } catch (err: any) {
       console.error("[OptimisticData] Failed to fetch user dashboard:", err)
-      return null
+      return dataCache.get(`userDashboard_${userAddress}`) || null
     }
   }
 
   // Main refresh function
-  const refreshData = useCallback(async (showLoading = false) => {
-    if (isRefreshingRef.current) return
+  const refreshData = useCallback(async (showLoading = false, forceRefresh = false) => {
+    if (isRefreshingRef.current && !forceRefresh) return
     
     isRefreshingRef.current = true
     
@@ -333,7 +414,9 @@ export function useOptimisticContractData() {
         setUserDashboard(null)
       }
 
-      setLastSuccessfulFetch(Date.now())
+      const now = Date.now()
+      setLastSuccessfulFetch(now)
+      cacheData('lastSuccessfulFetch', now)
       setError(null)
       
       // Clear expired optimistic updates
@@ -349,7 +432,7 @@ export function useOptimisticContractData() {
       setBackgroundRefreshing(false)
       isRefreshingRef.current = false
     }
-  }, [isConnected, address, initialLoading, lastSuccessfulFetch, clearExpiredOptimisticUpdates])
+  }, [isConnected, address, initialLoading, lastSuccessfulFetch, clearExpiredOptimisticUpdates, fetchEpochInfo, fetchVaultMetrics, fetchUserPosition, fetchUserDeposit, fetchUserDashboard, cacheData])
 
   // Handle wallet connection changes
   useEffect(() => {
@@ -357,17 +440,42 @@ export function useOptimisticContractData() {
     lastAddressRef.current = address
 
     if (addressChanged) {
-      // Immediate refresh on wallet change
-      refreshData(false)
+      console.log("[OptimisticData] Address changed:", { from: lastAddressRef.current, to: address })
+      
+      if (address) {
+        // Load cached data immediately for new address
+        const cachedPosition = dataCache.get(`userPosition_${address}`)
+        const cachedDashboard = dataCache.get(`userDashboard_${address}`)
+        const cachedDeposit = dataCache.get(`userDeposit_${address}`)
+        
+        if (cachedPosition) setUserPosition(cachedPosition)
+        if (cachedDashboard) setUserDashboard(cachedDashboard)
+        if (cachedDeposit) setUserDeposit(cachedDeposit)
+        
+        // Only show loading if no cached data exists
+        const hasUserData = cachedPosition || cachedDashboard
+        if (!hasUserData) {
+          setInitialLoading(true)
+        }
+      } else {
+        // Clear user data when disconnecting
+        setUserPosition(null)
+        setUserDeposit(null)
+        setUserDashboard(null)
+        setInitialLoading(false)
+      }
+      
+      // Refresh data for new address
+      refreshData(false, true)
     }
   }, [address, refreshData])
 
   // Initial load
   useEffect(() => {
-    if (initialLoading) {
-      refreshData(false)
+    if (initialLoading || (!epochInfo && !vaultMetrics)) {
+      refreshData(false, true)
     }
-  }, [initialLoading, refreshData])
+  }, [initialLoading, epochInfo, vaultMetrics, refreshData])
 
   // Background refresh interval
   useEffect(() => {
@@ -376,7 +484,7 @@ export function useOptimisticContractData() {
     }
 
     refreshIntervalRef.current = setInterval(() => {
-      refreshData(false) // Silent background refresh
+      refreshData(false, false) // Silent background refresh
     }, 30000) // 30 seconds
 
     return () => {
@@ -405,15 +513,22 @@ export function useOptimisticContractData() {
       const currentDeposited = Number.parseFloat(userPosition.totalDeposited)
       const newAmount = Number.parseFloat(amount)
       
-      setUserPosition(prev => prev ? {
-        ...prev,
+      const updatedPosition = {
+        ...userPosition,
         totalDeposited: (currentDeposited + newAmount).toString(),
         riskLevel: riskLevel // Update risk level if this is first deposit
-      } : null)
+      }
+      
+      setUserPosition(updatedPosition)
+      
+      // Cache the optimistic update
+      if (address) {
+        cacheData(`userPosition_${address}`, updatedPosition)
+      }
     }
 
     return id
-  }, [userPosition])
+  }, [userPosition, address, cacheData])
 
   const addOptimisticWithdrawal = useCallback(() => {
     const id = `withdrawal_${Date.now()}_${Math.random()}`
@@ -427,14 +542,21 @@ export function useOptimisticContractData() {
 
     // Optimistically update withdrawal status
     if (userPosition) {
-      setUserPosition(prev => prev ? {
-        ...prev,
+      const updatedPosition = {
+        ...userPosition,
         withdrawalRequested: true
-      } : null)
+      }
+      
+      setUserPosition(updatedPosition)
+      
+      // Cache the optimistic update
+      if (address) {
+        cacheData(`userPosition_${address}`, updatedPosition)
+      }
     }
 
     return id
-  }, [userPosition])
+  }, [userPosition, address, cacheData])
 
   const addOptimisticClaim = useCallback((epochNumber: number) => {
     const id = `claim_${Date.now()}_${Math.random()}`
@@ -449,22 +571,29 @@ export function useOptimisticContractData() {
 
     // Optimistically update dashboard
     if (userDashboard) {
-      setUserDashboard(prev => prev ? {
-        ...prev,
-        recentEpochsInfo: prev.recentEpochsInfo.map(epoch => 
+      const updatedDashboard = {
+        ...userDashboard,
+        recentEpochsInfo: userDashboard.recentEpochsInfo.map(epoch => 
           epoch.epochNumber === epochNumber 
             ? { ...epoch, hasClaimed: true, canClaim: false }
             : epoch
         ),
         claimInfo: {
-          ...prev.claimInfo,
-          claimableEpochs: prev.claimInfo.claimableEpochs.filter(e => e !== epochNumber)
+          ...userDashboard.claimInfo,
+          claimableEpochs: userDashboard.claimInfo.claimableEpochs.filter(e => e !== epochNumber)
         }
-      } : null)
+      }
+      
+      setUserDashboard(updatedDashboard)
+      
+      // Cache the optimistic update
+      if (address) {
+        cacheData(`userDashboard_${address}`, updatedDashboard)
+      }
     }
 
     return id
-  }, [userDashboard])
+  }, [userDashboard, address, cacheData])
 
   const addOptimisticRiskUpdate = useCallback((newRiskLevel: number) => {
     const id = `risk_${Date.now()}_${Math.random()}`
@@ -479,14 +608,21 @@ export function useOptimisticContractData() {
 
     // Optimistically update risk level
     if (userPosition) {
-      setUserPosition(prev => prev ? {
-        ...prev,
+      const updatedPosition = {
+        ...userPosition,
         riskLevel: newRiskLevel
-      } : null)
+      }
+      
+      setUserPosition(updatedPosition)
+      
+      // Cache the optimistic update
+      if (address) {
+        cacheData(`userPosition_${address}`, updatedPosition)
+      }
     }
 
     return id
-  }, [userPosition])
+  }, [userPosition, address, cacheData])
 
   const removeOptimisticUpdate = useCallback((id: string) => {
     setOptimisticState(prev => ({
@@ -499,14 +635,30 @@ export function useOptimisticContractData() {
 
   // Force refresh function for after transactions
   const forceRefresh = useCallback(() => {
-    refreshData(true)
-  }, [refreshData])
+    // Clear cache for current user to force fresh data
+    if (address) {
+      dataCache.delete(`userPosition_${address}`)
+      dataCache.delete(`userDashboard_${address}`)
+      dataCache.delete(`userDeposit_${address}`)
+    }
+    refreshData(true, true)
+  }, [refreshData, address])
 
   // Computed values with optimistic updates applied
   const hasOptimisticUpdates = optimisticState.pendingDeposits.length > 0 || 
                                optimisticState.pendingWithdrawals.length > 0 || 
                                optimisticState.pendingClaims.length > 0 || 
                                optimisticState.pendingRiskUpdates.length > 0
+
+  // Helper to check if user has deposits (including optimistic)
+  const hasUserDeposits = useCallback(() => {
+    if (!userPosition) return false
+    const currentDeposited = Number.parseFloat(userPosition.totalDeposited)
+    const pendingDeposits = optimisticState.pendingDeposits.reduce((sum, deposit) => 
+      sum + Number.parseFloat(deposit.amount), 0
+    )
+    return (currentDeposited + pendingDeposits) > 0
+  }, [userPosition, optimisticState.pendingDeposits])
 
   return {
     // Data
@@ -522,6 +674,9 @@ export function useOptimisticContractData() {
     error,
     hasOptimisticUpdates,
     lastSuccessfulFetch,
+    
+    // Helpers
+    hasUserDeposits,
     
     // Actions
     forceRefresh,

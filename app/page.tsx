@@ -20,7 +20,7 @@ import { isAddressAllowed } from "@/lib/allowedAddresses"
 
 export default function TroveFiApp() {
   const [activeTab, setActiveTab] = useState("dashboard")
-  const { isConnected, address } = useWallet()
+  const { isConnected, address, connect } = useWallet()
   const { 
     initialLoading, 
     backgroundRefreshing, 
@@ -28,7 +28,8 @@ export default function TroveFiApp() {
     hasOptimisticUpdates,
     lastSuccessfulFetch,
     epochInfo,
-    userPosition 
+    userPosition,
+    hasUserDeposits
   } = useOptimisticContractData()
   const [isAllowed, setIsAllowed] = useState(false)
 
@@ -36,6 +37,10 @@ export default function TroveFiApp() {
   useEffect(() => {
     setIsAllowed(isAddressAllowed(address))
   }, [address])
+
+  // Determine if we should show initial loading or welcome screen
+  const showWelcomeScreen = !isConnected
+  const showInitialLoading = isConnected && isAllowed && initialLoading && !hasUserDeposits()
 
   return (
     <main className="min-h-screen bg-background relative overflow-hidden">
@@ -62,19 +67,21 @@ export default function TroveFiApp() {
             </p>
           </div>
 
-          {/* Connection Check */}
-          {!isConnected ? (
+          {/* Welcome Screen - Only show when not connected */}
+          {showWelcomeScreen ? (
             <Card className="glass-card max-w-md mx-auto">
               <CardContent className="p-8 text-center space-y-4">
                 <div className="text-2xl font-bold text-foreground">Welcome to TroveFi</div>
                 <div className="text-muted-foreground">
                   Connect your wallet to access the no-loss yield lottery system
                 </div>
-                <WalletConnectButton 
-                  className="w-full py-6" 
-                  showAddress={false}
+                <Button
+                  onClick={connect}
+                  className="w-full py-6 bg-primary hover:bg-primary/80 text-primary-foreground"
                   size="lg"
-                />
+                >
+                  Connect Wallet
+                </Button>
               </CardContent>
             </Card>
           ) : !isAllowed ? (
@@ -118,6 +125,11 @@ export default function TroveFiApp() {
                 </div>
               </CardContent>
             </Card>
+          ) : showInitialLoading ? (
+            // Initial Loading - Only show when truly loading for first time
+            <div className="space-y-6">
+              <PortfolioSkeleton />
+            </div>
           ) : (
             <>
               {/* Beta Badge */}
@@ -130,33 +142,31 @@ export default function TroveFiApp() {
                 </Card>
                 
                 {/* Connection Status Indicator */}
-                {isConnected && (
-                  <Card className="glass-card border-border/20 inline-block">
-                    <CardContent className="px-3 py-2 flex items-center gap-2">
-                      {backgroundRefreshing ? (
-                        <>
-                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-                          <span className="text-xs text-muted-foreground">Syncing...</span>
-                        </>
-                      ) : hasOptimisticUpdates ? (
-                        <>
-                          <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
-                          <span className="text-xs text-muted-foreground">Pending...</span>
-                        </>
-                      ) : lastSuccessfulFetch > 0 ? (
-                        <>
-                          <Wifi className="w-3 h-3 text-green-500" />
-                          <span className="text-xs text-muted-foreground">Live</span>
-                        </>
-                      ) : (
-                        <>
-                          <WifiOff className="w-3 h-3 text-red-500" />
-                          <span className="text-xs text-muted-foreground">Offline</span>
-                        </>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
+                <Card className="glass-card border-border/20 inline-block">
+                  <CardContent className="px-3 py-2 flex items-center gap-2">
+                    {backgroundRefreshing ? (
+                      <>
+                        <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+                        <span className="text-xs text-muted-foreground">Syncing...</span>
+                      </>
+                    ) : hasOptimisticUpdates ? (
+                      <>
+                        <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
+                        <span className="text-xs text-muted-foreground">Pending...</span>
+                      </>
+                    ) : lastSuccessfulFetch > 0 ? (
+                      <>
+                        <Wifi className="w-3 h-3 text-green-500" />
+                        <span className="text-xs text-muted-foreground">Live</span>
+                      </>
+                    ) : (
+                      <>
+                        <WifiOff className="w-3 h-3 text-red-500" />
+                        <span className="text-xs text-muted-foreground">Offline</span>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
 
               {/* Error Banner */}
@@ -199,52 +209,28 @@ export default function TroveFiApp() {
 
                 <div className="mt-8">
                   <TabsContent value="dashboard" className="space-y-6">
-                    {initialLoading ? (
-                      <PortfolioSkeleton />
-                    ) : (
-                      <PortfolioDashboard setActiveTab={setActiveTab} />
-                    )}
+                    <PortfolioDashboard setActiveTab={setActiveTab} />
                   </TabsContent>
 
                   <TabsContent value="deposit" className="space-y-6">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      {initialLoading ? (
-                        <DepositSkeleton />
-                      ) : (
-                        <DepositInterface />
-                      )}
+                      <DepositInterface />
                       <div className="space-y-6">
-                        {initialLoading ? (
-                          <CookingSkeleton />
-                        ) : (
-                          <CookingVisualization />
-                        )}
+                        <CookingVisualization />
                         <RiskManagement />
                       </div>
                     </div>
                   </TabsContent>
 
                   <TabsContent value="rewards" className="space-y-6">
-                    {initialLoading ? (
-                      <EpochRewardsSkeleton />
-                    ) : (
-                      <EpochRewardsGrid />
-                    )}
+                    <EpochRewardsGrid />
                   </TabsContent>
 
                   <TabsContent value="cooking" className="space-y-6">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      {initialLoading ? (
-                        <CookingSkeleton />
-                      ) : (
-                        <CookingVisualization />
-                      )}
+                      <CookingVisualization />
                       <div className="space-y-6">
-                        {initialLoading ? (
-                          <EpochRewardsSkeleton />
-                        ) : (
-                          <EpochRewardsGrid />
-                        )}
+                        <EpochRewardsGrid />
                         <RiskManagement />
                       </div>
                     </div>

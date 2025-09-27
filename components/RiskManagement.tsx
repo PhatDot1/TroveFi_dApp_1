@@ -38,15 +38,15 @@ const RISK_LEVELS = [
 
 export default function RiskManagement() {
   const { isConnected } = useWallet()
-  const { userPosition } = useOptimisticContractData()
+  const { userPosition, hasUserDeposits } = useOptimisticContractData()
   const { updateRiskLevel, loading: txLoading } = useOptimisticTransactions()
   const [selectedRisk, setSelectedRisk] = useState<number | null>(null)
 
-  if (!isConnected || !userPosition || Number.parseFloat(userPosition.totalDeposited) === 0) {
+  if (!isConnected || !hasUserDeposits()) {
     return null // Don't show if no deposits
   }
 
-  const currentRiskLevel = userPosition.riskLevel
+  const currentRiskLevel = userPosition?.riskLevel || 0
   const currentRisk = RISK_LEVELS.find(r => r.level === currentRiskLevel)
 
   const handleRiskUpdate = async () => {

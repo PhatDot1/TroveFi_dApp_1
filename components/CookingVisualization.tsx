@@ -10,7 +10,7 @@ import { useWallet } from "@/hooks/useWallet"
 
 export default function CookingVisualization() {
   const { isConnected } = useWallet()
-  const { userDashboard, epochInfo, userPosition, userDeposit, hasOptimisticUpdates } = useOptimisticContractData()
+  const { userDashboard, epochInfo, userPosition, userDeposit, hasOptimisticUpdates, hasUserDeposits } = useOptimisticContractData()
   const [timeRemaining, setTimeRemaining] = useState(0)
 
   useEffect(() => {
@@ -39,8 +39,8 @@ export default function CookingVisualization() {
     )
   }
 
-  // Handle case where user has no deposits
-  if (!userPosition || Number.parseFloat(userPosition.totalDeposited) === 0) {
+  // Handle case where user has no deposits - use helper function
+  if (!hasUserDeposits()) {
     return (
       <Card className="glass-card">
         <CardHeader>
@@ -66,9 +66,10 @@ export default function CookingVisualization() {
     )
   }
 
-  const totalDeposited = Number.parseFloat(userPosition.totalDeposited)
+  // Safely get values with defaults
+  const totalDeposited = userPosition ? Number.parseFloat(userPosition.totalDeposited) : 0
   const currentEpoch = epochInfo?.epochNumber || 0
-  const riskLevel = userPosition.riskLevel
+  const riskLevel = userPosition?.riskLevel || 0
   const eligibleEpochsCount = userDashboard?.claimInfo.eligibleEpochsCount || 0
 
   // Calculate cooking intensity based on eligible epochs and deposit amount

@@ -48,13 +48,13 @@ const RISK_LEVELS = [
 
 export default function DepositInterface() {
   const { isConnected, address, provider } = useWallet()
-  const { userPosition } = useOptimisticContractData()
+  const { userPosition, hasUserDeposits } = useOptimisticContractData()
   const { depositNativeFlow, depositToken, loading: txLoading, error: txError } = useOptimisticTransactions()
   const [selectedAsset, setSelectedAsset] = useState("")
   const [amount, setAmount] = useState("")
   
   // Determine if this is first deposit and risk selection logic
-  const isFirstDeposit = !userPosition || Number.parseFloat(userPosition.totalDeposited) === 0
+  const isFirstDeposit = !hasUserDeposits()
   const showRiskSelection = isFirstDeposit
   const currentUserRiskLevel = userPosition?.riskLevel ?? 1
   const [riskLevel, setRiskLevel] = useState(currentUserRiskLevel)

@@ -16,7 +16,7 @@ interface PortfolioDashboardProps {
 
 export default function PortfolioDashboard({ setActiveTab }: PortfolioDashboardProps) {
   const { isConnected } = useWallet()
-  const { userDashboard, userPosition, userDeposit, vaultMetrics, hasOptimisticUpdates } = useOptimisticContractData()
+  const { userDashboard, userPosition, userDeposit, vaultMetrics, hasOptimisticUpdates, hasUserDeposits } = useOptimisticContractData()
   const { requestWithdrawal, updateRiskLevel, loading: txLoading } = useOptimisticTransactions()
   const [showWithdrawModal, setShowWithdrawModal] = useState(false)
   const [withdrawAmount, setWithdrawAmount] = useState("")
@@ -35,8 +35,8 @@ export default function PortfolioDashboard({ setActiveTab }: PortfolioDashboardP
     )
   }
 
-  // Handle case where user has no deposits yet
-  if (!userDashboard || !userPosition || Number.parseFloat(userPosition.totalDeposited) === 0) {
+  // Handle case where user has no deposits yet - use helper function
+  if (!hasUserDeposits()) {
     return (
       <div className="space-y-6">
         <Card className="glass-card">
@@ -67,7 +67,8 @@ export default function PortfolioDashboard({ setActiveTab }: PortfolioDashboardP
     )
   }
 
-  const totalDeposited = Number.parseFloat(userPosition.totalDeposited)
+  // Safely get values with defaults
+  const totalDeposited = userPosition ? Number.parseFloat(userPosition.totalDeposited) : 0
   const totalRewards = userDashboard ? Number.parseFloat(userDashboard.totalClaimableRewards) : 0
   const estimatedNextReward = userDashboard ? Number.parseFloat(userDashboard.estimatedNextEpochReward) : 0
 
@@ -124,6 +125,9 @@ export default function PortfolioDashboard({ setActiveTab }: PortfolioDashboardP
       console.error("Risk level update failed:", err)
     }
   }
+
+  // Get current risk level safely
+  const currentRiskLevel = userPosition?.riskLevel || 0
 
   return (
     <div className="space-y-6">
@@ -229,7 +233,7 @@ export default function PortfolioDashboard({ setActiveTab }: PortfolioDashboardP
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Shares</span>
-                <span className="font-medium text-foreground">{Number.parseFloat(userPosition.totalShares).toFixed(4)}</span>
+                <span className="font-medium text-foreground">{userPosition ? Number.parseFloat(userPosition.totalShares).toFixed(4) : "0"}</span>
               </div>
             </div>
           </CardContent>
@@ -245,8 +249,8 @@ export default function PortfolioDashboard({ setActiveTab }: PortfolioDashboardP
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Risk Level</span>
-                <Badge className={`${getRiskLevelColor(userPosition.riskLevel)} text-white`}>
-                  {getRiskLevelText(userPosition.riskLevel)}
+                <Badge className={`${getRiskLevelColor(currentRiskLevel)} text-white`}>
+                  {getRiskLevelText(currentRiskLevel)}
                 </Badge>
               </div>
             </div>
@@ -264,7 +268,7 @@ export default function PortfolioDashboard({ setActiveTab }: PortfolioDashboardP
             </div>
 
             {/* Withdrawal Status */}
-            {userPosition.withdrawalRequested && (
+            {userPosition?.withdrawalRequested && (
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">Withdrawal Status</span>

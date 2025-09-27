@@ -11,7 +11,7 @@ import { useWallet } from "@/hooks/useWallet"
 
 export default function EpochRewardsGrid() {
   const { isConnected } = useWallet()
-  const { userDashboard, epochInfo, userPosition, hasOptimisticUpdates } = useOptimisticContractData()
+  const { userDashboard, epochInfo, userPosition, hasOptimisticUpdates, hasUserDeposits } = useOptimisticContractData()
   const { claimEpochReward, loading: txLoading } = useOptimisticTransactions()
   const [claimingEpoch, setClaimingEpoch] = useState<number | null>(null)
   const [recentClaim, setRecentClaim] = useState<{ epoch: number; won: boolean; amount: string } | null>(null)
@@ -49,8 +49,8 @@ export default function EpochRewardsGrid() {
     )
   }
 
-  // Handle case where user has no deposits
-  if (!userPosition || Number.parseFloat(userPosition.totalDeposited) === 0) {
+  // Handle case where user has no deposits - use helper function
+  if (!hasUserDeposits()) {
     return (
       <Card className="glass-card">
         <CardHeader>
@@ -85,8 +85,8 @@ export default function EpochRewardsGrid() {
   const totalClaimableRewards = userDashboard ? Number.parseFloat(userDashboard.totalClaimableRewards) : 0
   
   // Calculate user's potential share of the total yield pool
-  const userDeposited = Number.parseFloat(userPosition.totalDeposited)
-  const userRiskLevel = userPosition.riskLevel
+  const userDeposited = userPosition ? Number.parseFloat(userPosition.totalDeposited) : 0
+  const userRiskLevel = userPosition?.riskLevel || 0
   const riskMultipliers = [0.5, 1.0, 2.0] // LOW, MEDIUM, HIGH
   const userRiskMultiplier = riskMultipliers[userRiskLevel] || 1.0
   
