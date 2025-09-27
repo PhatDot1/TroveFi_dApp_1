@@ -281,14 +281,7 @@ export default function PortfolioDashboard({ setActiveTab }: PortfolioDashboardP
             )}
 
             {/* Withdrawal Impact Warning */}
-            <Card className="border-destructive/20 bg-destructive/5">
-              <CardContent className="p-3">
-                <div className="text-xs text-destructive-foreground">
-                  <strong>Withdrawal Impact:</strong> Withdrawing funds will forfeit future epoch rewards but your
-                  principal is always protected.
-                </div>
-              </CardContent>
-            </Card>
+
           </CardContent>
         </Card>
       </div>
